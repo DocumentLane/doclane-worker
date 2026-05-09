@@ -99,7 +99,11 @@ export class PdfLinearizationService {
           groupSize: pageTreeGroupSize,
           qpdfPath,
         });
-        await execFileAsync(fixQdfPath, [balancedQdfPath, fixedQdfPath]);
+        await this.fixQdf({
+          fixQdfPath,
+          inputPath: balancedQdfPath,
+          outputPath: fixedQdfPath,
+        });
         await execFileAsync(qpdfPath, [fixedQdfPath, balancedPdfPath]);
         await execFileAsync(qpdfPath, [
           '--linearize',
@@ -242,6 +246,23 @@ export class PdfLinearizationService {
       size: nextObjectId,
       outputPath: params.outputPath,
     });
+  }
+
+  private async fixQdf(params: {
+    fixQdfPath: string;
+    inputPath: string;
+    outputPath: string;
+  }): Promise<void> {
+    const { stdout } = await execFileAsync(
+      params.fixQdfPath,
+      [params.inputPath],
+      {
+        encoding: 'buffer',
+        maxBuffer: 1024 * 1024 * 100,
+      },
+    );
+
+    await writeFile(params.outputPath, stdout);
   }
 
   private parseQdfObjects(qdfBytes: Buffer): QdfObject[] {
