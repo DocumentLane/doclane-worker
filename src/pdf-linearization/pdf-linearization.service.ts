@@ -1,7 +1,9 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -253,16 +255,38 @@ export class PdfLinearizationService {
     inputPath: string;
     outputPath: string;
   }): Promise<void> {
-    const { stdout } = await execFileAsync(
-      params.fixQdfPath,
-      [params.inputPath],
-      {
-        encoding: 'buffer',
-        maxBuffer: 1024 * 1024 * 100,
-      },
-    );
+    const child = spawn(params.fixQdfPath, [params.inputPath], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stderrChunks: Buffer[] = [];
 
-    await writeFile(params.outputPath, stdout);
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+    });
+
+    const exitPromise = new Promise<void>((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+
+        const stderr = Buffer.concat(stderrChunks).toString('utf8').trim();
+        reject(
+          new Error(
+            `fix-qdf exited with code ${code ?? 'null'} signal ${
+              signal ?? 'null'
+            }${stderr ? `: ${stderr}` : ''}`,
+          ),
+        );
+      });
+    });
+
+    await Promise.all([
+      pipeline(child.stdout, createWriteStream(params.outputPath)),
+      exitPromise,
+    ]);
   }
 
   private parseQdfObjects(qdfBytes: Buffer): QdfObject[] {
