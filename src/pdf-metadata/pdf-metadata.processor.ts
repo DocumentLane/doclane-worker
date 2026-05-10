@@ -1,6 +1,7 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
+import { PdfLinearizationResult } from '../pdf-linearization/interfaces/pdf-linearization-result.interface';
 import { PdfLinearizationService } from '../pdf-linearization/pdf-linearization.service';
 import { PdfRasterizationService } from '../pdf-rasterization/pdf-rasterization.service';
 import { S3Service } from '../s3/s3.service';
@@ -41,8 +42,7 @@ export class PdfMetadataProcessor extends WorkerHost {
       );
       await job.updateProgress(20);
 
-      const linearizationResult =
-        await this.pdfLinearizationService.linearize(pdfBytes);
+      const linearizationResult = await this.tryLinearize(pdfBytes);
       await job.updateProgress(40);
 
       let linearization: PdfMetadataLinearizationResult;
@@ -104,6 +104,7 @@ export class PdfMetadataProcessor extends WorkerHost {
           ? await this.createPreview(job, linearizationResult.bytes)
           : undefined;
       await job.updateProgress(95);
+      await job.updateProgress(100);
 
       await this.resultQueue.add(
         'metadata-completed',
@@ -111,6 +112,7 @@ export class PdfMetadataProcessor extends WorkerHost {
           jobId: job.id?.toString() ?? job.data.documentId,
           documentId: job.data.documentId,
           status: 'completed',
+          progressPercent: 100,
           pageCount: metadata.pageCount,
           hasTextLayer: metadata.hasTextLayer,
           pages: metadata.pages,
@@ -119,7 +121,6 @@ export class PdfMetadataProcessor extends WorkerHost {
         },
         this.createResultJobOptions(job),
       );
-      await job.updateProgress(100);
       return;
     } catch (error) {
       const errorMessage = this.createErrorMessage(error);
@@ -164,6 +165,33 @@ export class PdfMetadataProcessor extends WorkerHost {
     }
 
     return 'PDF metadata extraction failed.';
+  }
+
+  private async tryLinearize(
+    pdfBytes: Uint8Array,
+  ): Promise<PdfLinearizationResult> {
+    try {
+      return await this.pdfLinearizationService.linearize(pdfBytes);
+    } catch (error) {
+      const errorMessage = this.createLinearizationErrorMessage(error);
+
+      this.logger.warn(`PDF linearization unavailable. ${errorMessage}`);
+
+      return {
+        bytes: pdfBytes,
+        linearized: false,
+        errorMessage,
+        sizeBytes: pdfBytes.byteLength,
+      };
+    }
+  }
+
+  private createLinearizationErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Unknown linearization error.';
   }
 
   private async createPreview(

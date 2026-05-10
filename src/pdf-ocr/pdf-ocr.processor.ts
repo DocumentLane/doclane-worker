@@ -68,6 +68,7 @@ export class PdfOcrProcessor extends WorkerHost {
       const ocrPdf = recognized.ocrPdfBytes
         ? await this.uploadOcrPdf(job, recognized.ocrPdfBytes)
         : undefined;
+      await job.updateProgress(100);
 
       await this.resultQueue.add(
         'ocr-completed',
@@ -75,12 +76,12 @@ export class PdfOcrProcessor extends WorkerHost {
           jobId: job.id?.toString() ?? job.data.documentId,
           documentId: job.data.documentId,
           status: 'completed',
+          progressPercent: 100,
           pages: recognized.pages,
           ocrPdf,
         },
         this.createResultJobOptions(job),
       );
-      await job.updateProgress(100);
       return;
     } catch (error) {
       const errorMessage = this.createErrorMessage(error);

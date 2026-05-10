@@ -35,6 +35,7 @@ RUN apt-get update \
     qpdf \
     tesseract-ocr \
     tesseract-ocr-eng \
+    tesseract-ocr-kor \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build --chown=node:node /app/package.json ./package.json

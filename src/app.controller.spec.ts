@@ -157,6 +157,7 @@ describe('PdfMetadataProcessor', () => {
           jobId: 'job-1',
           documentId: 'document-1',
           status: 'completed',
+          progressPercent: 100,
           pageCount: 2,
           hasTextLayer: true,
           pages: [
@@ -214,6 +215,78 @@ describe('PdfMetadataProcessor', () => {
         body: Buffer.from('preview-png'),
         contentType: 'image/png',
       });
+    });
+
+    it('continues metadata extraction when pdf linearization fails', async () => {
+      const pdfBytes = Buffer.from('%PDF original');
+      const qpdfError = new Error(
+        'Command failed: qpdf --check /tmp/doclane-pdf-linearize-T5cfXq/output.pdf',
+      );
+
+      s3Service.getObjectBytes.mockResolvedValue(pdfBytes);
+      pdfLinearizationService.linearize.mockRejectedValue(qpdfError);
+      pdfRasterizationService.rasterizePage.mockResolvedValue({
+        pageNumber: 1,
+        width: 640,
+        height: 900,
+        contentType: 'image/png',
+        bytes: Buffer.from('preview-png'),
+      });
+      pdfMetadataService.extract.mockResolvedValue({
+        pageCount: 1,
+        hasTextLayer: true,
+        pages: [
+          {
+            pageNumber: 1,
+            width: 100,
+            height: 100,
+            rotation: 0,
+            hasTextLayer: true,
+          },
+        ],
+      });
+
+      await processor.process({
+        id: 'job-1',
+        data: {
+          documentId: 'document-1',
+          objectKey: 'documents/user-1/document-1/original.pdf',
+          storageBucket: 'documents',
+        },
+        updateProgress: jest.fn(),
+      } as never);
+
+      expect(pdfMetadataService.extract).toHaveBeenCalledWith(
+        pdfBytes,
+        expect.any(Object),
+      );
+      expect(pdfRasterizationService.rasterizePage).toHaveBeenCalledWith({
+        documentId: 'document-1',
+        pdfBytes,
+        pageNumber: 1,
+        targetWidth: 640,
+      });
+      expect(s3Service.putObjectBytes).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'documents/document-1/linearized.pdf',
+        }),
+      );
+      expect(resultQueue.add).toHaveBeenCalledWith(
+        'metadata-completed',
+        expect.objectContaining({
+          status: 'completed',
+          progressPercent: 100,
+          linearization: {
+            status: 'UNAVAILABLE',
+            errorMessage: qpdfError.message,
+          },
+        }),
+        {
+          jobId: 'job-1-result',
+          removeOnComplete: false,
+          removeOnFail: false,
+        },
+      );
     });
   });
 });
@@ -386,6 +459,7 @@ describe('PdfOcrProcessor', () => {
           jobId: 'job-1',
           documentId: 'document-1',
           status: 'completed',
+          progressPercent: 100,
           pages: [
             {
               pageNumber: 1,

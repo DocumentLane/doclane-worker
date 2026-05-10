@@ -27,6 +27,7 @@ export interface PdfMetadataSuccessResultPayload {
   jobId: string;
   documentId: string;
   status: 'completed';
+  progressPercent: number;
   pageCount: number;
   hasTextLayer: boolean;
   pages: PdfMetadataPageResult[];

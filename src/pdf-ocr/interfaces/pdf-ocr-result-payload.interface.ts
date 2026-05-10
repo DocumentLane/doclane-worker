@@ -17,6 +17,7 @@ export interface PdfOcrSuccessResultPayload {
   jobId: string;
   documentId: string;
   status: 'completed';
+  progressPercent: number;
   pages: PdfOcrResultItem[];
   ocrPdf?: PdfOcrResultPdf;
 }
