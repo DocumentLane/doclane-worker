@@ -6,7 +6,7 @@ export const environmentValidationSchema = Joi.object({
   REDIS_USERNAME: Joi.string().optional(),
   REDIS_PASSWORD: Joi.string().optional(),
   REDIS_DB: Joi.number().integer().min(0).default(0),
-  S3_REGION: Joi.string().optional(),
+  S3_REGION: Joi.string().default('us-east-1'),
   S3_ACCESS_KEY_ID: Joi.string().optional(),
   S3_SECRET_ACCESS_KEY: Joi.string().optional(),
   S3_ENDPOINT: Joi.string().uri().optional(),
@@ -23,6 +23,15 @@ export const environmentValidationSchema = Joi.object({
     .falsy('false')
     .default(false),
   PDF_LINEARIZATION_QPDF_PATH: Joi.string().default('qpdf'),
+  PDF_LINEARIZATION_FIX_QDF_PATH: Joi.string().default('fix-qdf'),
+  PDF_LINEARIZATION_REBALANCE_PAGE_TREE_ENABLED: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .default(true),
+  PDF_LINEARIZATION_PAGE_TREE_GROUP_SIZE: Joi.number()
+    .integer()
+    .min(2)
+    .default(32),
   PDF_RASTERIZATION_PDFTOPPM_PATH: Joi.string().default('pdftoppm'),
   PDF_METADATA_PDFINFO_PATH: Joi.string().default('pdfinfo'),
   PDF_METADATA_PDFTOTEXT_PATH: Joi.string().default('pdftotext'),
